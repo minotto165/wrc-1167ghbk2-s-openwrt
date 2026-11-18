@@ -1,0 +1,4 @@
+#!/bin/sh
+# sleep mock — 待ちループを高速に回す。呼び出し回数を数える。
+[ -n "${UCI_STATE:-}" ] && printf '%s\n' "${1:-}" >> "$UCI_STATE/.sleep_calls"
+exit 0

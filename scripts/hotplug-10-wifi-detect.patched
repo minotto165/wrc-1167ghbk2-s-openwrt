@@ -1,0 +1,14 @@
+#!/bin/sh
+# /etc/hotplug.d/ieee80211/10-wifi-detect
+#
+# upstream:
+#   [ "${ACTION}" = "add" ] && {
+#           /sbin/wifi config
+#   }
+# これだと phy が増えるたび（DBDC 有効化時など）に /etc/config/wireless が
+# 再生成され、手で書いた sta / default_radio1 が消える。
+# 設定が既にある場合は何もしないようにする。
+
+[ "${ACTION}" = "add" ] && [ ! -s /etc/config/wireless ] && {
+    /sbin/wifi config
+}

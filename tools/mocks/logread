@@ -1,0 +1,17 @@
+#!/bin/sh
+# ============================================================
+# logread mock — 802.1X 失敗っぽい行を出すだけ。
+# setup.sh は logread の出力を grep -iE 'eap|8021x|802\.1x|deauth|wpa' に通す。
+# POSIX sh のみ。
+# ============================================================
+[ -n "${UCI_STATE:-}" ] && printf '%s\n' "logread" >> "$UCI_STATE/calls.log"
+
+cat <<'EOF'
+Thu Nov 18 13:00:01 2026 kern.info kernel: [    1.000000] mt7915e 0000:01:00.0: HW/SW Version: 0x8a108a10
+Thu Nov 18 13:00:05 2026 daemon.notice netifd: Interface 'wwan' is setting up now
+Thu Nov 18 13:00:06 2026 daemon.err wpa_supplicant[2141]: wlan1: CTRL-EVENT-EAP-STARTED EAP authentication started
+Thu Nov 18 13:00:07 2026 daemon.err wpa_supplicant[2141]: wlan1: CTRL-EVENT-EAP-FAILURE EAP authentication failed
+Thu Nov 18 13:00:08 2026 daemon.notice wpa_supplicant[2141]: wlan1: CTRL-EVENT-DISCONNECTED bssid=00:11:22:33:44:55 reason=3
+Thu Nov 18 13:00:09 2026 daemon.err wpa_supplicant[2141]: wlan1: Association request to the driver failed
+Thu Nov 18 13:00:10 2026 daemon.warn hostapd: wlan0: STA deauth from 00:aa:bb:cc:dd:ee
+EOF

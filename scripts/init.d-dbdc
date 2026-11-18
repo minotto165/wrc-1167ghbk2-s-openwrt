@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+# mt7615 DBDC 有効化（phy0=2.4GHz / phy1=5GHz）
+# /etc/init.d/dbdc に置いて  /etc/init.d/dbdc enable
+# START=18 は wpad(19) / network(20) より前でなければ意味がない
+START=18
+
+start() {
+    mkdir -p /sys/kernel/debug
+    mount | grep -q " /sys/kernel/debug " || mount -t debugfs none /sys/kernel/debug 2>/dev/null
+    DBDC=/sys/kernel/debug/ieee80211/phy0/mt76/dbdc
+    if [ ! -e "$DBDC" ]; then
+        logger -t dbdc "dbdc node not found (driver not ready)"
+        return 0
+    fi
+    echo 1 > "$DBDC"
+    logger -t dbdc "dbdc=$(cat "$DBDC") phys=$(ls /sys/class/ieee80211/ | tr '\n' ' ')"
+}
+
+stop() { :; }

@@ -1,0 +1,5 @@
+school.env
+home.env
+.DS_Store
+*.log
+emul/work/

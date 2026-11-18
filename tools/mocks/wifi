@@ -1,0 +1,79 @@
+#!/bin/sh
+# ============================================================
+# wifi mock — OpenWrt の /sbin/wifi を模したテスト用スタブ
+#
+#   config   : 無線設定が空のときだけ「検出結果」を生成する
+#              （実機の wifi config と同じく、既存設定があれば触らない）
+#              生成内容: radio0=2g / radio1=5g、両方 disabled=1、
+#                        default_radioN = mode ap / ssid OpenWrt / encryption none
+#              生成するラジオは MOCK_RADIOS（"radio0:2g radio1:5g" 形式）で制御。
+#              MOCK_WIFI_CONFIG_FAIL=1 で失敗させる。
+#   reload/up/down : 何もせず 0。呼ばれたことを $UCI_STATE/calls.log に記録
+#   status         : それらしいテキストを出すだけ
+#
+# POSIX sh のみ。
+# ============================================================
+DIR=$(cd "$(dirname "$0")" && pwd)
+UCI_BIN=${MOCK_UCI:-$DIR/uci}
+
+mark() {
+	[ -n "${UCI_STATE:-}" ] || return 0
+	printf '%s\n' "$*" >> "$UCI_STATE/calls.log"
+}
+
+case "${1:-}" in
+	config)
+		mark "wifi config"
+		[ "${MOCK_WIFI_CONFIG_FAIL:-0}" = "0" ] || exit 1
+		# 既に無線設定があるなら何もしない（実機同様）
+		if [ -f "$UCI_STATE/p/wireless/order" ] && [ -s "$UCI_STATE/p/wireless/order" ]; then
+			exit 0
+		fi
+		for spec in ${MOCK_RADIOS:-radio0:2g radio1:5g}; do
+			dev=${spec%%:*}
+			band=${spec##*:}
+			case $band in
+				2g) ch=11 ;;
+				5g) ch=36 ;;
+				*) ch=auto ;;
+			esac
+			"$UCI_BIN" -q set "wireless.$dev=wifi-device"
+			"$UCI_BIN" -q set "wireless.$dev.band=$band"
+			"$UCI_BIN" -q set "wireless.$dev.channel=$ch"
+			"$UCI_BIN" -q set "wireless.$dev.disabled=1"
+			"$UCI_BIN" -q set "wireless.default_$dev=wifi-iface"
+			"$UCI_BIN" -q set "wireless.default_$dev.device=$dev"
+			"$UCI_BIN" -q set "wireless.default_$dev.mode=ap"
+			"$UCI_BIN" -q set "wireless.default_$dev.network=lan"
+			"$UCI_BIN" -q set "wireless.default_$dev.ssid=OpenWrt"
+			"$UCI_BIN" -q set "wireless.default_$dev.encryption=none"
+		done
+		"$UCI_BIN" -q commit wireless
+		exit 0
+		;;
+	reload)
+		mark "wifi reload"
+		exit 0
+		;;
+	up)
+		mark "wifi up"
+		exit 0
+		;;
+	down)
+		mark "wifi down"
+		exit 0
+		;;
+	status)
+		printf 'wlan0     ESSID: "test"\n'
+		printf '          Mode: Master  Channel: 1\n'
+		exit 0
+		;;
+	"")
+		printf 'usage: wifi {up|down|reload|config|status}\n' >&2
+		exit 1
+		;;
+	*)
+		printf 'wifi mock: unknown command: %s\n' "$1" >&2
+		exit 1
+		;;
+esac

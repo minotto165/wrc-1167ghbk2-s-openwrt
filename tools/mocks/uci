@@ -1,0 +1,372 @@
+#!/bin/sh
+# ============================================================
+# uci mock — OpenWrt の uci を模したテスト用スタブ
+#
+# 状態は $UCI_STATE 以下のファイルに永続化する（1 ディレクトリ）:
+#   p/<package>/order             セクション内部 ID の並び（1 行 1 個、作成順）
+#   p/<package>/sec/<id>/type     セクションタイプ（例: wifi-device）
+#   p/<package>/sec/<id>/anon     匿名セクションのときだけ存在する空ファイル
+#   p/<package>/sec/<id>/opt/<n>  オプション値（生の文字列。quote しない）
+#   p/<package>/sec/<id>/list/<n>/NNN  リスト値（連番ファイル、NNN で順序）
+#
+# 実機 (busybox/libuci) に寄せた点:
+#   - `show` は 2 行形式:  wireless.radio0=wifi-device / wireless.radio0.band='2g'
+#   - 文字列はシングルクォート。値に ' を含む場合は '\'' にエスケープ
+#   - 匿名セクションは show 上 @zone[0] と表示し、get/set/delete/add_list の
+#     @type[idx] 参照を解決する
+#   - -q はエラーメッセージだけ抑制する（終了コードは同じ）
+#   - リスト値の get は 1 行 1 値
+#
+# 未実装: rename / import / export / -c による別ディレクトリ（無視）、
+#         値に改行を含むケース（テスト対象外）
+#
+# POSIX sh のみで書いてある（macOS /bin/sh, dash, busybox ash 想定）。
+# ============================================================
+
+Q=0
+while [ $# -gt 0 ]; do
+	case $1 in
+		-q) Q=1; shift ;;
+		-c) shift; [ $# -gt 0 ] && shift ;;
+		--) shift; break ;;
+		-*) printf 'uci: unknown option: %s\n' "$1" >&2; exit 1 ;;
+		*) break ;;
+	esac
+done
+
+if [ -z "${UCI_STATE:-}" ]; then
+	printf 'uci mock: UCI_STATE is not set\n' >&2
+	exit 1
+fi
+BASE="$UCI_STATE/p"
+
+CMD=${1:-}
+if [ -z "$CMD" ]; then
+	[ "$Q" -eq 1 ] || printf 'uci: no command given\n' >&2
+	exit 1
+fi
+shift
+
+err() {
+	[ "$Q" -eq 1 ] || printf 'uci: %s\n' "$*" >&2
+	exit 1
+}
+
+# ------------------------------------------------------------
+# 内部ヘルパ
+# ------------------------------------------------------------
+
+# pkg.section.option を KP / KS / KO に分解
+split_key() {
+	KP=${1%%.*}
+	_rest=${1#*.}
+	if [ "$_rest" = "$1" ]; then
+		KS=''
+		KO=''
+		return 1
+	fi
+	KS=${_rest%%.*}
+	if [ "$KS" = "$_rest" ]; then
+		KO=''
+	else
+		KO=${_rest#*.}
+	fi
+	return 0
+}
+
+next_anon_id() {
+	mkdir -p "$BASE/$1"
+	_n=0
+	if [ -f "$BASE/$1/.seq" ]; then
+		_n=$(cat "$BASE/$1/.seq")
+	fi
+	_n=$((_n + 1))
+	printf '%s\n' "$_n" > "$BASE/$1/.seq"
+	printf 'cfg%s\n' "$_n"
+}
+
+# mk_section pkg name(空なら匿名) type -> 内部 ID を stdout へ
+mk_section() {
+	_pkg=$1
+	_name=$2
+	_type=$3
+	if [ -n "$_name" ]; then
+		_id=$_name
+	else
+		_id=$(next_anon_id "$_pkg")
+	fi
+	mkdir -p "$BASE/$_pkg/sec/$_id/opt" "$BASE/$_pkg/sec/$_id/list"
+	printf '%s\n' "$_type" > "$BASE/$_pkg/sec/$_id/type"
+	if [ -z "$_name" ]; then
+		: > "$BASE/$_pkg/sec/$_id/anon"
+	fi
+	if [ ! -f "$BASE/$_pkg/order" ] || ! grep -qx "$_id" "$BASE/$_pkg/order" 2>/dev/null; then
+		printf '%s\n' "$_id" >> "$BASE/$_pkg/order"
+	fi
+	printf '%s\n' "$_id"
+}
+
+# resolve pkg sect(@type[idx] or 名前) -> 内部 ID を stdout へ
+resolve() {
+	_pkg=$1
+	_sect=$2
+	case $_sect in
+		@*)
+			_want=${_sect#@}
+			_wantidx=0
+			case $_sect in
+				*'['*)
+					_wantidx=${_sect#*\[}
+					_wantidx=${_wantidx%]}
+					;;
+			esac
+			_want=${_want%%\[*}
+			[ -f "$BASE/$_pkg/order" ] || return 1
+			_n=0
+			while IFS= read -r _id; do
+				[ -n "$_id" ] || continue
+				# 実機の libuci は @type[idx] を「その type の N 番目のセクション」
+				# として解決する（匿名/名前付きを問わない）。
+				_type=$(cat "$BASE/$_pkg/sec/$_id/type" 2>/dev/null)
+				[ "$_type" = "$_want" ] || continue
+				if [ "$_n" -eq "$_wantidx" ]; then
+					printf '%s\n' "$_id"
+					return 0
+				fi
+				_n=$((_n + 1))
+			done < "$BASE/$_pkg/order"
+			return 1
+			;;
+		*)
+			if [ -d "$BASE/$_pkg/sec/$_sect" ]; then
+				printf '%s\n' "$_sect"
+				return 0
+			fi
+			return 1
+			;;
+	esac
+}
+
+# uci の /etc/config 形式の quote（' → '\''）
+sq_val() {
+	printf '%s' "$1" | sed "s/'/'\\\\''/g"
+}
+
+show_val() {
+	printf "'%s'" "$(sq_val "$1")"
+}
+
+# 匿名セクションの表示名 @type[idx]
+anon_disp() {
+	_pkg=$1
+	_want=$2
+	_type=$3
+	_n=0
+	_sid=''
+	if [ -f "$BASE/$_pkg/order" ]; then
+		while IFS= read -r _sid; do
+			[ "$_sid" = "$_want" ] && break
+			[ -f "$BASE/$_pkg/sec/$_sid/anon" ] || continue
+			[ "$(cat "$BASE/$_pkg/sec/$_sid/type" 2>/dev/null)" = "$_type" ] || continue
+			_n=$((_n + 1))
+		done < "$BASE/$_pkg/order"
+	fi
+	printf '@%s[%s]' "$_type" "$_n"
+}
+
+do_show_pkg() {
+	_pkg=$1
+	if [ ! -d "$BASE/$_pkg" ]; then
+		err "Entry not found"
+	fi
+	[ -f "$BASE/$_pkg/order" ] || return 0
+	_id=''
+	_opt=''
+	_f=''
+	while IFS= read -r _id; do
+		[ -n "$_id" ] || continue
+		[ -d "$BASE/$_pkg/sec/$_id" ] || continue
+		_type=$(cat "$BASE/$_pkg/sec/$_id/type" 2>/dev/null)
+		if [ -f "$BASE/$_pkg/sec/$_id/anon" ]; then
+			_disp=$(anon_disp "$_pkg" "$_id" "$_type")
+		else
+			_disp=$_id
+		fi
+		printf '%s.%s=%s\n' "$_pkg" "$_disp" "$_type"
+
+		# オプション（実機同様に名前順）
+		if [ -d "$BASE/$_pkg/sec/$_id/opt" ]; then
+			for _o in $(ls "$BASE/$_pkg/sec/$_id/opt" 2>/dev/null | sort); do
+				_f="$BASE/$_pkg/sec/$_id/opt/$_o"
+				printf '%s.%s.%s=%s\n' "$_pkg" "$_disp" "$_o" "$(show_val "$(cat "$_f")")"
+			done
+		fi
+
+		# リスト
+		if [ -d "$BASE/$_pkg/sec/$_id/list" ]; then
+			for _o in $(ls "$BASE/$_pkg/sec/$_id/list" 2>/dev/null | sort); do
+				_vals=''
+				for _f in $(ls "$BASE/$_pkg/sec/$_id/list/$_o" 2>/dev/null | sort); do
+					_vals="$_vals $(show_val "$(cat "$BASE/$_pkg/sec/$_id/list/$_o/$_f")")"
+				done
+				printf '%s.%s.%s=%s\n' "$_pkg" "$_disp" "$_o" "${_vals# }"
+			done
+		fi
+	done < "$BASE/$_pkg/order"
+}
+
+# ------------------------------------------------------------
+# コマンド
+# ------------------------------------------------------------
+case $CMD in
+	get)
+		[ $# -ge 1 ] || err "Invalid argument"
+		split_key "$1" || err "Invalid argument"
+		_id=$(resolve "$KP" "$KS") || err "Entry not found"
+		if [ -z "$KO" ]; then
+			_v=$(cat "$BASE/$KP/sec/$_id/type" 2>/dev/null)
+			printf '%s\n' "$_v"
+		else
+			_d="$BASE/$KP/sec/$_id"
+			if [ -f "$_d/opt/$KO" ]; then
+				cat "$_d/opt/$KO"
+				printf '\n'
+			elif [ -d "$_d/list/$KO" ]; then
+				for _f in $(ls "$_d/list/$KO" 2>/dev/null | sort); do
+					cat "$_d/list/$KO/$_f"
+					printf '\n'
+				done
+			else
+				err "Entry not found"
+			fi
+		fi
+		;;
+
+	set)
+		[ $# -ge 1 ] || err "Invalid argument"
+		_arg=$1
+		case $_arg in
+			*=*)
+				_key=${_arg%%=*}
+				_val=${_arg#*=}
+				;;
+			*)
+				if [ $# -ge 2 ]; then
+					_key=$_arg
+					_val=$2
+				else
+					err "Invalid argument"
+				fi
+				;;
+		esac
+		split_key "$_key" || err "Invalid argument"
+		_id=$(resolve "$KP" "$KS")
+		if [ -z "$_id" ]; then
+			case $KS in
+				@*) err "Invalid argument" ;;
+			esac
+			if [ -z "$KO" ]; then
+				_id=$(mk_section "$KP" "$KS" "$_val")
+			else
+				_id=$(mk_section "$KP" "$KS" '')
+			fi
+		fi
+		_d="$BASE/$KP/sec/$_id"
+		if [ -z "$KO" ]; then
+			printf '%s\n' "$_val" > "$_d/type"
+		else
+			mkdir -p "$_d/opt"
+			rm -rf "$_d/list/$KO"
+			printf '%s' "$_val" > "$_d/opt/$KO"
+		fi
+		;;
+
+	add)
+		[ $# -ge 2 ] || err "Invalid argument"
+		_id=$(mk_section "$1" '' "$2")
+		printf '%s\n' "$_id"
+		;;
+
+	add_list)
+		[ $# -ge 1 ] || err "Invalid argument"
+		_arg=$1
+		case $_arg in
+			*=*)
+				_key=${_arg%%=*}
+				_val=${_arg#*=}
+				;;
+			*)
+				if [ $# -ge 2 ]; then
+					_key=$_arg
+					_val=$2
+				else
+					err "Invalid argument"
+				fi
+				;;
+		esac
+		split_key "$_key" || err "Invalid argument"
+		[ -n "$KO" ] || err "Invalid argument"
+		_id=$(resolve "$KP" "$KS") || err "Entry not found"
+		_d="$BASE/$KP/sec/$_id"
+		mkdir -p "$_d/list/$KO"
+		# 既存が文字列ならリストへ変換（実機同様、既存値を保持）
+		if [ -f "$_d/opt/$KO" ]; then
+			_n=0
+			printf '%s' "$(cat "$_d/opt/$KO")" > "$_d/list/$KO/$(printf '%03d' "$_n")"
+			rm -f "$_d/opt/$KO"
+		fi
+		_n=$(ls "$_d/list/$KO" 2>/dev/null | wc -l | tr -d ' ')
+		printf '%s' "$_val" > "$_d/list/$KO/$(printf '%03d' "$_n")"
+		;;
+
+	delete)
+		[ $# -ge 1 ] || err "Invalid argument"
+		split_key "$1" || err "Invalid argument"
+		_id=$(resolve "$KP" "$KS") || err "Entry not found"
+		if [ -z "$KO" ]; then
+			rm -rf "$BASE/$KP/sec/$_id"
+			if [ -f "$BASE/$KP/order" ]; then
+				awk -v x="$_id" '$0 != x' "$BASE/$KP/order" > "$BASE/$KP/order.new"
+				mv "$BASE/$KP/order.new" "$BASE/$KP/order"
+			fi
+		else
+			_d="$BASE/$KP/sec/$_id"
+			if [ -f "$_d/opt/$KO" ] || [ -d "$_d/list/$KO" ]; then
+				rm -rf "$_d/opt/$KO" "$_d/list/$KO"
+			else
+				err "Entry not found"
+			fi
+		fi
+		;;
+
+	show)
+		if [ $# -ge 1 ]; then
+			do_show_pkg "$1"
+		else
+			for _d in "$BASE"/*; do
+				[ -d "$_d" ] || continue
+				do_show_pkg "${_d##*/}"
+			done
+		fi
+		;;
+
+	commit)
+		# 状態は常にファイルへ書き込み済みなので何もしない
+		exit 0
+		;;
+
+	changes)
+		# 未コミット変更の概念は無い（常にコミット済み）
+		exit 0
+		;;
+
+	revert)
+		exit 0
+		;;
+
+	*)
+		err "Unknown command: $CMD"
+		;;
+esac
+
+exit 0

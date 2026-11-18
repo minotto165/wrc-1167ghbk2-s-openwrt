@@ -1,0 +1,9 @@
+#!/bin/sh
+# ifup mock — OpenWrt の ifup 相当。wwan を up させたことにして印を残す。
+# (setup.sh が将来 `ifup wwan` を呼ぶ修正を入れた場合に機能する)
+[ -n "${UCI_STATE:-}" ] || exit 1
+printf '%s\n' "$*" >> "$UCI_STATE/ifup.log"
+if [ "${1:-}" = "wwan" ]; then
+	: > "$UCI_STATE/.ifup_wwan"
+fi
+exit 0

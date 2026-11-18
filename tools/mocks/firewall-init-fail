@@ -1,0 +1,4 @@
+#!/bin/sh
+# FW_INIT mock — restart が失敗するケース用。
+[ -n "${UCI_STATE:-}" ] && printf '%s %s (fail)\n' "${0##*/}" "$*" >> "$UCI_STATE/fw.log"
+exit 1

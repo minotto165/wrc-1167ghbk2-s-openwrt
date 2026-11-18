@@ -1,0 +1,77 @@
+#!/bin/sh
+# ============================================================
+# ubus mock — `ubus call network.interface.wwan status` だけを模す
+#
+#   MOCK_WWAN_UP=1        : "up": true を返す（既定）
+#   MOCK_WWAN_UP=0        : 永遠に "up": false
+#   MOCK_WWAN_UP_AFTER=N  : N 回目の呼び出しから up になる（待ちループ検証用）
+#   MOCK_WWAN_ADDR=...    : up 時の address（既定 192.0.2.10）
+#   呼び出し回数は $UCI_STATE/.ubus_wwan_calls に記録
+# POSIX sh のみ。
+# ============================================================
+if [ -z "${UCI_STATE:-}" ]; then
+	printf 'ubus mock: UCI_STATE is not set\n' >&2
+	exit 1
+fi
+
+case "${1:-}" in
+	call)
+		obj=${2:-}
+		method=${3:-}
+		case $obj in
+			network.interface.wwan/)
+				obj=network.interface.wwan
+				;;
+		esac
+		if [ "$obj" != "network.interface.wwan" ] || [ "$method" != "status" ]; then
+			printf 'ubus mock: unsupported call: %s %s\n' "${2:-}" "${3:-}" >&2
+			exit 1
+		fi
+		n=0
+		if [ -f "$UCI_STATE/.ubus_wwan_calls" ]; then
+			n=$(cat "$UCI_STATE/.ubus_wwan_calls")
+		fi
+		n=$((n + 1))
+		printf '%s\n' "$n" > "$UCI_STATE/.ubus_wwan_calls"
+
+		# netifd が設定を読み直していないと up にならない、という実機挙動の再現。
+		# MOCK_WWAN_REQUIRES_IFUP=1 のときは `ifup wwan` 相当が走るまで down のまま。
+		if [ "${MOCK_WWAN_REQUIRES_IFUP:-0}" = "1" ] && [ ! -f "$UCI_STATE/.ifup_wwan" ]; then
+			printf '{\n'
+			printf '\t"up": false,\n'
+			printf '\t"pending": true,\n'
+			printf '\t"available": false\n'
+			printf '}\n'
+			exit 0
+		fi
+
+		after=${MOCK_WWAN_UP_AFTER:-0}
+		case $after in
+			''|*[!0-9]*) after=0 ;;
+		esac
+		if [ "${MOCK_WWAN_UP:-1}" = "1" ] && [ "$n" -ge "$after" ]; then
+			printf '{\n'
+			printf '\t"up": true,\n'
+			printf '\t"pending": false,\n'
+			printf '\t"available": true,\n'
+			printf '\t"uptime": 12,\n'
+			printf '\t"l3_device": "wlan1",\n'
+			printf '\t"proto": "dhcp",\n'
+			printf '\t"address": "%s",\n' "${MOCK_WWAN_ADDR-192.0.2.10}"
+			printf '\t"netmask": "255.255.255.0",\n'
+			printf '\t"dns-server": [\n\t\t"192.0.2.1"\n\t]\n'
+			printf '}\n'
+		else
+			printf '{\n'
+			printf '\t"up": false,\n'
+			printf '\t"pending": true,\n'
+			printf '\t"available": false\n'
+			printf '}\n'
+		fi
+		exit 0
+		;;
+	*)
+		printf 'ubus mock: unsupported command: %s\n' "${1:-}" >&2
+		exit 1
+		;;
+esac

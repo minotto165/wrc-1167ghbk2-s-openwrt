@@ -1,0 +1,4 @@
+#!/bin/sh
+# FW_INIT mock — /etc/init.d/firewall の代わり。restart されたことを記録して成功。
+[ -n "${UCI_STATE:-}" ] && printf '%s %s\n' "${0##*/}" "$*" >> "$UCI_STATE/fw.log"
+exit 0
