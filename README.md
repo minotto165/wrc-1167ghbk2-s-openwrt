@@ -1,20 +1,12 @@
-# ELECOM WRC-1167GHBK2-S を OpenWrt で「WPA2-Enterprise クライアント + 自前AP」にする
+# WRC-1167GHBK2-S を OpenWrt で WPA2-Enterprise クライアント（AP）にする
 
 学校 Wi-Fi（WPA2-Enterprise / PEAP-MSCHAPv2）にルーター自身がクライアントとしてログインし、
-その回線を自分専用の SSID として再放出する。実機で最後まで通した構成の記録。
-
-```
-        ┌─────────────── WRC-1167GHBK2-S (OpenWrt 24.10.8) ───────────────┐
-学校Wi-Fi ─2.4GHz→ phy0-sta0 ─NAT→ br-lan ─→ phy1-ap0 ─5GHz→ 自分の端末
- (EAP)         wwan(DHCP)      fw4 masq        MyRouter / ch36 / 80MHz
-        └─────────────────────────────────────────────────────────────────┘
-```
+その回線を自分専用の SSID として再放出する。
 
 ## 構成
 
 SoC は MT7621A（RAM 128MB / Flash 16MB）。無線は MT7615D 1チップ。
 上流を `radio0`、下流を `radio1` に割り当て、`wwan` を wan ゾーンに入れて NAT で再放出する。
-学校から見ると「1台の端末が EAP 認証した」だけになる。
 
 ## 実績
 
@@ -207,10 +199,3 @@ scripts/
   school.env.example       学校の資格情報のテンプレート
 tools/                     検証用ハーネス（mock uci / Docker+qemu）
 ```
-
-## 注意
-
-- 学校のネットワーク利用規約を確認すること。私的ルーターの接続・再放出を禁じている場合がある。
-- 検知されうる要素: MAC 登録制、1端末1認証、TTL/ホップ数の検査、DHCP フィンガープリント、同時接続数。
-- `ca_cert_usesystem='0'` は中間者攻撃に無防備になる。恒久対処は学校の CA 証明書を入れること。
-- 資格情報はこのリポジトリに含めない（`school.env` は `.gitignore` 済み）。
