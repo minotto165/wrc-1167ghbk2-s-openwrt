@@ -239,6 +239,16 @@ ping -c 2 8.8.8.8
 
 端末を `MyRouter` に繋いで `curl -s -o /dev/null -w '%{http_code}' https://www.google.com` → `200`。
 
+### 8. （任意）配下の端末を DoH にする
+
+学校の DNS フィルタを回避したい場合だけ。ルーター1台で全端末に効く。
+
+```sh
+opkg update && opkg install https-dns-proxy
+```
+
+設定・検証・戻し方は [docs/04-doh.md](docs/04-doh.md)。
+
 ## トラブルシュート
 
 | 症状 | 原因 | 対処 |
@@ -293,6 +303,7 @@ docs/
   verification-source.md   ソースコードでの裏取り（hostapd/wifi-scripts/mt76）
   verification-harness.md  モックテスト 181 ケースの結果
   verification-emul.md     本物の uci/ash を qemu で動かした検証
+  04-doh.md                配下の端末を DoH にする（任意）
 scripts/
   setup.sh                 EAP + AP + NAT を一括設定（実 uci で検証済み）
   mode-school.sh           学校モードへ切替
