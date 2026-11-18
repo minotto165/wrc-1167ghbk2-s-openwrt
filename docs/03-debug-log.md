@@ -25,7 +25,7 @@ LED の意味（`package/base-files/files/etc/diag.sh` の `set_led_state()`）:
 
 → 起動はしている。無線だけが上がっていない。
 
-原因は uci-defaults スクリプトの「失敗しても何も出力せずに `exit 0`」設計。
+原因は uci-defaults スクリプトの「失敗しても無言で `exit 0`」設計。
 `board.json` に `wlan` が無い・phy の登録が30秒を超える・5GHz だけ先に出る、のいずれでも静かに空振りする。
 
 なお `wlan2g` LED は `linux,default-trigger = "phy0radio"` なので、
@@ -51,7 +51,7 @@ iw dev t1 scan                      # → 成功（近隣APが見える）
 iw dev t1 scan ssid <学校SSID>       # → 成功
 ```
 
-ドライバ・ファーム・DFS は問題なく、wpa_supplicant 経由のときだけ壊れる。
+ドライバ・ファーム・DFS はシロで、wpa_supplicant 経由のときだけ壊れる。
 
 手動で wpa_supplicant を起こすと:
 
@@ -95,7 +95,7 @@ DBDC を有効にすると `phy1` が生え、`wifi config` が `radio1` を作�
    → これが「再起動すると MyRouter が消える」の正体
 
 さらに `radio1` を手書きしたとき `option type 'mac80211'` を忘れたため、
-netifd がそのセクションをエラーも出さずに無視した（`phy1` はあるのに `phy1-ap0` が生えない）。
+netifd はそのセクションを黙って無視した（`phy1` はあるのに `phy1-ap0` が生えない）。
 
 ## 第5の壁: sched scan の永久リトライ
 

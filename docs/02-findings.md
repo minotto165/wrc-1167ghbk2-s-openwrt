@@ -8,7 +8,7 @@
 ### `wifi-device` には `option type 'mac80211'` が必須
 
 `/etc/config/wireless` に手で `config wifi-device 'radio1'` を書いたとき、
-`type` を忘れると netifd はそのセクションをエラーも出さずに無視する（`ubus call network.wireless status` にも出ない）。
+`type` を忘れると netifd はそのセクションを黙って無視する（`ubus call network.wireless status` にも出ない）。
 
 `wifi config`（`ucode /lib/wifi/mac80211.uc | uci -q batch`）が生成するセクションには必ず入っているので、
 手書き・コピペのときだけ踏む。症状は「`phy1` は存在するのに `phy1-ap0` が生えない」。
