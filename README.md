@@ -24,6 +24,7 @@
 | 下流 AP 再放出 | `phy1-ap0` AP-ENABLED / ch36 / 80MHz |
 | 端末 → インターネット | `curl https://www.google.com` → **200** |
 | 再起動後の自動復帰 | 設定・DBDC・AP・上流すべて復帰 |
+| DoH（配下の全端末） | 2インスタンス起動、外向き53を落としても名前解決（→ [04-doh.md](docs/04-doh.md)） |
 
 ## ハードウェア
 
