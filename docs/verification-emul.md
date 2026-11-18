@@ -1,4 +1,4 @@
-# エミュレーション検証レポート — setup.sh を「本物の ash + 本物の uci」で走らせる
+# エミュレーション検証レポート: setup.sh を「本物の ash + 本物の uci」で走らせる
 
 担当: emul-runner / 共有タスク `task-3`
 対象: `~/openwrt-setup/setup.sh`（**変更していない**。`emul/work/setup.sh` はコピー）

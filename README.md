@@ -1,7 +1,7 @@
 # ELECOM WRC-1167GHBK2-S を OpenWrt で「WPA2-Enterprise クライアント + 自前AP」にする
 
-学校 Wi-Fi（WPA2-Enterprise / PEAP-MSCHAPv2）に **ルーター自身がクライアントとしてログイン**し、
-その回線を **自分専用の SSID** として再放出するための、実機で最後まで通した構成の記録。
+学校 Wi-Fi（WPA2-Enterprise / PEAP-MSCHAPv2）にルーター自身がクライアントとしてログインし、
+その回線を自分専用の SSID として再放出するための、実機で最後まで通した構成の記録。
 
 ```
         ┌─────────────── WRC-1167GHBK2-S (OpenWrt 24.10.8) ───────────────┐
@@ -217,7 +217,7 @@ upstream はこうなっている:
 ```
 
 phy が増えるたび **無条件で `wifi config`** するので、DBDC で phy1 が生えた瞬間に
-`/etc/config/wireless` が再生成され、`sta` も AP も消える。**これが「再起動で MyRouter が消える」の正体。**
+`/etc/config/wireless` が再生成され、`sta` も AP も消える。これが「再起動で MyRouter が消える」の正体。
 
 ```sh
 [ "${ACTION}" = "add" ] && [ ! -s /etc/config/wireless ] && {

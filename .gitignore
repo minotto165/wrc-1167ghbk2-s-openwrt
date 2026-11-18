@@ -3,3 +3,5 @@ home.env
 .DS_Store
 *.log
 emul/work/
+.yomiyasu/
+yomi-orig/

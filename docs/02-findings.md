@@ -8,7 +8,7 @@
 ### `wifi-device` には `option type 'mac80211'` が必須
 
 `/etc/config/wireless` に手で `config wifi-device 'radio1'` を書いたとき、
-`type` を忘れると **netifd はそのセクションを黙って無視する**（`ubus call network.wireless status` にも出ない）。
+`type` を忘れると netifd はそのセクションをエラーも出さずに無視する（`ubus call network.wireless status` にも出ない）。
 
 `wifi config`（`ucode /lib/wifi/mac80211.uc | uci -q batch`）が生成するセクションには必ず入っているので、
 手書き・コピペのときだけ踏む。症状は「`phy1` は存在するのに `phy1-ap0` が生えない」。
@@ -67,7 +67,7 @@ if (max_sched_scan_ssids < 1 || wpa_s->conf->disable_scan_offload)
 
 mt76 は `max_sched_scan_ssids >= 1` を広告するので supplicant は sched scan を選ぶが、
 mt7615 では `NL80211_CMD_START_SCHED_SCAN` が失敗する。`scan.c:1954-1958` は
-**通常スキャンにフォールバックせず**状態を戻すだけなので、`Failed to initiate sched scan` が
+通常スキャンには切り替えず、状態を戻すだけなので、`Failed to initiate sched scan` が
 3秒ごとに永久に出続ける。
 
 回避は生成される supplicant 設定への1行注入（`/lib/netifd/hostapd.sh:1323` の

@@ -183,7 +183,7 @@ DEFAULT_PACKAGES:=\
 注意点（スクリプト側の改善余地）:
 
 1. `CA_USESYSTEM=0` にすると `ca_cert` 無し → wpa_supplicant は**サーバ証明書を検証しない**。`setup.sh:29` のコメント「0=検証しない」は正しいが、リスクの明示が弱い。既定 1 は妥当。
-2. 学内 RADIUS が**私設 CA**（大学独自 CA）で署名している場合、ca-bundle には入っていないので検証失敗 → EAP が失敗する。その場合は `option ca_cert '/path/to/school-ca.pem'` を渡す必要がある。現状スクリプトに `ca_cert` 直接指定の口が無い。
+2. 学内 RADIUS が**私設 CA**（大学独自 CA）で署名している場合、ca-bundle には入っていないので検証失敗 → EAP が失敗する。その場合は `option ca_cert '/path/to/school-ca.pem'` を渡す必要がある。現状スクリプトに `ca_cert` を直接指定する方法が無い。
 
 ### 項目 4: `ieee80211w`（NG）
 
@@ -311,7 +311,7 @@ schema `files-ucode/usr/share/schema/wireless.wifi-device.json`:
 2. **ゾーン特定の脆さ**: L143 の sed は `firewall.@zone[1].name='wan'` にも一致する（`@zone[1]` にドットが無いため）ので実質 `@zone[1]` になる。既定 config では wan が `@zone[1]` で正しいが、**匿名セクションの並び順に依存**する。名前付きセクション（`config zone 'wan'`）に移行している構成では `firewall.wan.name` に一致して安定する。フォールバック `@zone[1]` は「wan が 2 番目」前提なので、より安全にするなら `uci show firewall | grep -c ...` ではなく `network` リストに `wan` を含むゾーンを探す方が堅い。
 3. **順序は問題ない**: `wifi reload`（L156）は `ubus call network reload`（`wifi` スクリプト `:52-54`）で、netifd の `config_init_all()` が `netifd_ucode_config_load()` を呼ぶ（netifd `config.c:814, 825`）ため、追加した wwan vif も反映される。firewall restart 時点で wwan が未 up でも、`firewall4/root/etc/hotplug.d/iface/20-firewall` が `ifup`/`ifupdate` で `fw4 -q reload` するので NAT は後追いで有効になる。
 
-### 項目 9（追加）: wpad が EAP 対応版か — **最重要の前提**
+### 項目 9（追加）: wpad が EAP 対応版か（最重要の前提）
 
 `target/linux/ramips/mt7621/target.mk:13`
 
@@ -397,7 +397,7 @@ NG の場合はイメージを作り直す（`CONFIG_PACKAGE_wpad-mbedtls=y`、`
 
 理由: 項目 9 が NG だと以降の設定が全て無効。CA ファイルも無言でスキップされる仕様（`supplicant.uc:151-152`）なので、事前に気づけるようにする。
 
-### 4-3. 私設 CA 用の口（L29 付近と L122 付近）
+### 4-3. 私設 CA を渡す方法（L29 付近と L122 付近）
 
 ```diff
  CA_USESYSTEM="${CA_USESYSTEM:-1}"   # 1=システムCAで証明書検証 / 0=検証しない
@@ -409,7 +409,7 @@ NG の場合はイメージを作り直す（`CONFIG_PACKAGE_wpad-mbedtls=y`、`
 +if [ -n "$CA_CERT" ]; then u set wireless.sta_wan.ca_cert="$CA_CERT"; else u delete wireless.sta_wan.ca_cert 2>/dev/null || true; fi
 ```
 
-理由: `ca_cert` を直接渡す経路が現状無い。私設 CA の学校では ca-bundle 検証が失敗する（`supplicant.uc:151-152` は `ca_cert_usesystem` が真なら**必ず** ca-bundle を指すため、併用できない点に注意 — 両方指定すると `ca_cert` が上書きされる。順序は `ca_cert_usesystem` を 0 にして `ca_cert` を渡すのが確実）。
+理由: `ca_cert` を直接渡す経路が現状無い。私設 CA の学校では ca-bundle 検証が失敗する（`supplicant.uc:151-152` は `ca_cert_usesystem` が真なら**必ず** ca-bundle を指すため、併用できない点に注意、両方指定すると `ca_cert` が上書きされる。順序は `ca_cert_usesystem` を 0 にして `ca_cert` を渡すのが確実）。
 
 → より安全な形:
 
