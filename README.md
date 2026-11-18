@@ -12,7 +12,7 @@
 
 ## 構成
 
-本体は MT7621A（RAM 128MB / Flash 16MB / **MT7615D 1チップ**）。
+SoC は MT7621A（RAM 128MB / Flash 16MB）。無線は MT7615D 1チップ。
 上流を `radio0`、下流を `radio1` に割り当て、`wwan` を wan ゾーンに入れて NAT で再放出する。
 学校から見ると「1台の端末が EAP 認証した」だけになる。
 
@@ -26,7 +26,7 @@
 | 下流 AP 再放出 | `phy1-ap0` AP-ENABLED / ch36 / 80MHz |
 | 端末 → インターネット | `curl https://www.google.com` → `200` |
 | 再起動後の自動復帰 | 設定・DBDC・AP・上流すべて復帰 |
-| DoH（配下の全端末） | 外向き53を落としても名前解決（[docs/04-doh.md](docs/04-doh.md)） |
+| DoH（配下の全端末） | 外向き 53 を落としても名前解決できる（[docs/04-doh.md](docs/04-doh.md)） |
 
 ## 手順
 
@@ -39,7 +39,7 @@
 ### 1. 純正 → OpenWrt
 
 1. 純正ファームで `http://192.168.2.1/details.html`（管理アカウント作成 → 詳細設定）
-2. 「ファームウェア手動更新」で factory イメージ。**`wrc-1167ghbk2-s_v0.00.bin` にリネーム必須**（純正 UI がファイル名を検査する）
+2. 「ファームウェア手動更新」で factory イメージを選ぶ。**`wrc-1167ghbk2-s_v0.00.bin` にリネーム必須**（純正 UI がファイル名を検査する）
 3. 更新実行 → 3〜5分 → `192.168.1.1` で起動
 4. `ssh root@192.168.1.1`（パスワードは空）
 
@@ -47,7 +47,7 @@
 
 ### 2. DBDC を有効化する
 
-MT7615D は既定だと1つの phy が両バンドを持ち、同じ phy に STA と AP を同居させると送信が破綻する。
+MT7615D は既定では1つの phy が両バンドを持ち、同じ phy に STA と AP を同居させると送信が破綻する。
 DBDC で phy を2つに割る。
 
 ```sh
@@ -131,10 +131,10 @@ uci commit firewall
 
 ### 6. 再起動に耐えるようにする（2ファイル）
 
-**① DBDC を起動時に有効化** — `scripts/init.d-dbdc` を `/etc/init.d/dbdc` に置いて `enable`。
+**① DBDC を起動時に有効化**：`scripts/init.d-dbdc` を `/etc/init.d/dbdc` に置いて `enable`。
 START=18 は `wpad`(19) / `network`(20) より前でないと意味がない。
 
-**② hotplug が設定を消すのを止める** — `/etc/hotplug.d/ieee80211/10-wifi-detect` は phy が増えるたび
+**② hotplug が設定を消すのを止める**：`/etc/hotplug.d/ieee80211/10-wifi-detect` は phy が増えるたび
 無条件で `wifi config` するため、DBDC で phy1 が生えた瞬間に設定が再生成される。
 
 ```sh
