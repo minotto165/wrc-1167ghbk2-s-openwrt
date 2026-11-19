@@ -15,6 +15,9 @@ set -e
 EAP_TYPE="${EAP_TYPE:-peap}"
 EAP_AUTH="${EAP_AUTH-MSCHAPV2}"
 STA_BAND="${STA_BAND:-5g}"
+# 1 = サーバ証明書を検証する（学校の CA と domain が要る）
+# 0 = 検証しない。私有 CA の学校では mbedtls がホスト名を要求して失敗するため既定は 0
+CA_VERIFY="${CA_VERIFY:-0}"
 
 say() { echo; echo "===== $* ====="; }
 
@@ -48,7 +51,7 @@ else
 fi
 uci set wireless.sta.identity="$EAP_IDENTITY"
 uci set wireless.sta.password="$EAP_PASSWORD"
-uci set wireless.sta.ca_cert_usesystem='1'
+uci set wireless.sta.ca_cert_usesystem="$CA_VERIFY"
 uci set wireless.sta.ieee80211w='1'
 uci -q delete wireless.sta.key
 uci commit wireless
