@@ -7,6 +7,11 @@ set -e
 : "${HOME_PSK:?HOME_PSK が未設定です}"
 say() { echo; echo "===== $* ====="; }
 
+say "0. 役割を戻す（STA=2.4G / AP=5G）"
+uci set wireless.sta.device='radio0'
+uci set wireless.default_radio1.device='radio1'
+uci commit wireless
+
 say "1. PSK 設定"
 uci set wireless.sta.disabled='0'
 uci set wireless.sta.ssid="$HOME_SSID"

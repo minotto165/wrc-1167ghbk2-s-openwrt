@@ -14,7 +14,7 @@ set -e
 : "${EAP_PASSWORD:?EAP_PASSWORD が未設定です（/root/school.env）}"
 EAP_TYPE="${EAP_TYPE:-peap}"
 EAP_AUTH="${EAP_AUTH-MSCHAPV2}"
-STA_BAND="${STA_BAND:-2g}"
+STA_BAND="${STA_BAND:-5g}"
 
 say() { echo; echo "===== $* ====="; }
 
@@ -25,10 +25,13 @@ if wpad_bin=$(command -v wpad); then :; fi
 if [ -x /usr/sbin/wpa_supplicant ]; then
     /usr/sbin/wpa_supplicant -v 2>/dev/null | head -1
 fi
-if [ "$STA_BAND" = "2g" ]; then
-    uci set wireless.sta.device='radio0'
-else
+# STA と AP は別の phy に置く。同じ phy に同居させると送信が壊れる
+if [ "$STA_BAND" = "5g" ]; then
     uci set wireless.sta.device='radio1'
+    uci set wireless.default_radio1.device='radio0'
+else
+    uci set wireless.sta.device='radio0'
+    uci set wireless.default_radio1.device='radio1'
 fi
 
 say "1. EAP 設定"
